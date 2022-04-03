@@ -1,4 +1,4 @@
-# This Repository consists of numerous exercises given during the NLP course of the University Of Haifa's NLP Course (Spring 2022).
+# Exercises from the University Of Haifa's NLP Course (Spring 2022).
 
 Exercise 1: 
   The script loads various corpus files and free-text files (not included in git - use any file) to create a combined corpus, which is then printed out, sentence by sentence.
