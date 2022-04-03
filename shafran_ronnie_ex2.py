@@ -288,6 +288,18 @@ class NGramModelBase(ABC):
         self.total_tokens = corpus.num_of_tokens
         self.num_of_random_sentences = 5
 
+    @abstractmethod
+    def get_sentence_probability(self, sentence: str):
+        pass
+
+    @abstractmethod
+    def get_model_title(self) -> str:
+        pass
+
+    @abstractmethod
+    def generate_random_sentence(self, length: int) -> str:
+        pass
+
     def unigram_smooth(self, token: str) -> float:
         numerator = self.uni_dict.get(token.lower(), 0) + 1
         denominator = self.total_tokens + len(self.uni_dict.keys())
@@ -330,18 +342,6 @@ class NGramModelBase(ABC):
         probabilities = list(self.corpus.trigram_options_dict[prev_tokens].values())
         next_token = choices(options, weights=probabilities, k=1)[0]
         return next_token
-
-    @abstractmethod
-    def get_sentence_probability(self, sentence: str):
-        pass
-
-    @abstractmethod
-    def get_model_title(self) -> str:
-        pass
-
-    @abstractmethod
-    def generate_random_sentence(self, length: int) -> str:
-        pass
 
     def get_sentences_probability(self, sentences: list) -> None:
         result = ""
@@ -470,7 +470,7 @@ class NGramModel:
         result = ""
         corpus.update_length_probabilities()
         length = \
-        choices(list(self.corpus.lengths_probabilities.keys()), weights=list(self.corpus.lengths_probabilities.values()), k=1)[0]
+            choices(list(self.corpus.lengths_probabilities.keys()), weights=list(self.corpus.lengths_probabilities.values()), k=1)[0]
         result += self.unigram_model.get_random_sentences(length)
         result += "\n"
         result += self.bigram_model.get_random_sentences(length)
