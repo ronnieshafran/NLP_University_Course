@@ -114,21 +114,28 @@ class Corpus:
         sentence = Sentence(self.sentence_index)
         for child in element:
             if len(child) > 0:
-                for word in child:
-                    token = self.tokenize_xml_element(word)
-                    sentence.add_token(token)
-                    if token.text is not None:
-                        sentence.length += len(token.text)
+                self.tokenize_complex_child(child, sentence)
+                for c in child:
+                    self.tokenize_complex_child(c, sentence)
                 continue
             token = self.tokenize_xml_element(child)
-            sentence.add_token(token)
             if token.text is not None:
+                sentence.add_token(token)
                 sentence.length += len(token.text)
                 self.add_word_to_distinct_dict(token.text.lower())
         self.add_sentence(sentence)
         self.add_tokens_to_bigram(sentence.tokens)
         self.add_tokens_to_trigram(sentence.tokens)
         self.sentence_index += 1
+
+    def tokenize_complex_child(self, element, sentence):
+        for subelement in element:
+            if len(subelement) > 0:
+                self.tokenize_complex_child(subelement, sentence)
+        token = self.tokenize_xml_element(element)
+        if token.text is not None:
+            sentence.add_token(token)
+            sentence.length += len(token.text)
 
     def split_text_to_sentences(self, text: str) -> []:
         result = []
@@ -274,9 +281,6 @@ class Corpus:
                 options_dict[token] /= occurrences
 
 
-# Implement an n-gram language model class, that will be built using a corpus of type "Corpus" (thus, you will need to
-# connect it in any way you want to the "Corpus" class):
-
 class NGramModelBase(ABC):
 
     def __init__(self, corpus: Corpus):
@@ -308,14 +312,14 @@ class NGramModelBase(ABC):
     def bigram_smooth(self, token_1: str, token_2: str) -> float:
         key = (token_1.lower(), token_2.lower())
         numerator = self.bi_dict.get(key, 0) + 1
-        token_2_count = self.uni_dict.get(token_2.lower(), 0)
-        denominator = token_2_count + len(self.bi_dict.keys())
+        token_1_count = self.uni_dict.get(token_1.lower(), 0)
+        denominator = token_1_count + len(self.bi_dict.keys())
         return log(numerator / denominator)
 
     def trigram_smooth(self, token_1: str, token_2: str, token_3: str) -> float:
         key = (token_1.lower(), token_2.lower(), token_3.lower())
         numerator = self.tri_dict.get(key, 0) + 1
-        bigram_count = self.bi_dict.get((token_2, token_3), 0)
+        bigram_count = self.bi_dict.get((token_1, token_2), 0)
         denominator = bigram_count + len(self.tri_dict.keys())
         return log(numerator / denominator)
 
@@ -424,6 +428,7 @@ class TrigramModel(NGramModelBase):
         probability += self.bigram_smooth(tokens[0], tokens[1])
         for triplet in triplewise(tokens):
             probability += self.trigram_interpolation(triplet[0], triplet[1], triplet[2])
+
         return probability
 
     def get_model_title(self) -> str:
@@ -442,8 +447,8 @@ class TrigramModel(NGramModelBase):
         return ' '.join(tokens)
 
     def trigram_interpolation(self, token_1, token_2, token_3):
-        param1 = param2 = 0.25
-        param3 = 0.5
+        param1 = param2 = 0.15
+        param3 = 0.7
         unigram_prob = self.unigram_smooth(token_3)
         bigram_prob = self.bigram_smooth(token_2, token_3)
         trigram_prob = self.trigram_smooth(token_1, token_2, token_3)
@@ -498,14 +503,13 @@ if __name__ == '__main__':
                  'Ogres are like onions.', 'You’re tearing me apart, Lisa!', 'I live my life one quarter at a time.']
 
     # second task - add the required tokens to the pre-existing corpus
-    corpus.add_begin_and_end_tokens()
     try:
         with open(output_file, encoding="utf8", mode="w") as file:
-            # print the first task's output
             file.write(ngram.get_sentences_probability(sentences))
-            # print the second task's output
+            corpus.add_begin_and_end_tokens()
             file.write(ngram.get_random_sentences())
             print(f"Successfully written to file: {output_file}")
     except:
         print("Failed writing to file!")
+
     print(f"Elapsed Time: {process_time() - start_time}")
