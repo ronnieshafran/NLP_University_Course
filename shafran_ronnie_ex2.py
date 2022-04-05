@@ -447,7 +447,8 @@ class TrigramModel(NGramModelBase):
         return ' '.join(tokens)
 
     def trigram_interpolation(self, token_1, token_2, token_3):
-        param1 = param2 = 0.15
+        param1 = 0.1
+        param2 = 0.2
         param3 = 0.7
         unigram_prob = self.unigram_smooth(token_3)
         bigram_prob = self.bigram_smooth(token_2, token_3)
