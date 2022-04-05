@@ -442,7 +442,8 @@ class TrigramModel(NGramModelBase):
         return ' '.join(tokens)
 
     def trigram_interpolation(self, token_1, token_2, token_3):
-        param1 = param2 = param3 = 0.3333
+        param1 = param2 = 0.25
+        param3 = 0.5
         unigram_prob = self.unigram_smooth(token_3)
         bigram_prob = self.bigram_smooth(token_2, token_3)
         trigram_prob = self.trigram_smooth(token_1, token_2, token_3)
@@ -496,7 +497,6 @@ if __name__ == '__main__':
     sentences = ['May the Force be with you.', 'I’m going to make him an offer he can’t refuse.',
                  'Ogres are like onions.', 'You’re tearing me apart, Lisa!', 'I live my life one quarter at a time.']
 
-    ngram.get_sentences_probability(sentences)
     # second task - add the required tokens to the pre-existing corpus
     corpus.add_begin_and_end_tokens()
     try:
