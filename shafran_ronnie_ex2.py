@@ -237,8 +237,8 @@ class Corpus:
 
     # This method adds the <B> & <E> tags, and updates all required dictionaries as well.
     def add_begin_and_end_tokens(self) -> None:
-        begin = Token("Beginning", None, None, None, "<B>")
-        end = Token("End", None, None, None, "<E>")
+        begin = Token("Beginning", None, None, None, "<b>")
+        end = Token("End", None, None, None, "<e>")
         for sentence in self.sentences:
             sentence.insert_token(begin, 0)
             sentence.add_token(end)
@@ -389,7 +389,7 @@ class UnigramModel(NGramModelBase):
                       weights=list(self.corpus.unigram_probabilities_dict.values()), k=length - 1)
         for tok in ccs:
             tokens.append(tok)
-            if tok == "<e>" or tok == "<E>":
+            if tok == "<e>":
                 break
         return ' '.join(tokens)
 
@@ -414,7 +414,7 @@ class BigramModel(NGramModelBase):
             next_token = self.generate_random_bigram_token(prev_token)
             tokens.append(next_token)
             i += 1
-            if next_token == "<e>" or next_token == "<E>":
+            if next_token == "<e>":
                 break
         return ' '.join(tokens)
 
@@ -435,14 +435,14 @@ class TrigramModel(NGramModelBase):
         return "Trigrams Model"
 
     def generate_random_sentence(self, length: int) -> str:
-        tokens = ["<b>", self.generate_random_bigram_token("<B>")]
+        tokens = ["<b>", self.generate_random_bigram_token("<b>")]
         i = 2
         while i < length:
             prev_tokens = (tokens[i - 2].lower(), tokens[i - 1].lower())
             next_token = self.generate_random_trigram_token(prev_tokens)
             tokens.append(next_token)
             i += 1
-            if next_token == "<e>" or next_token == "<E>":
+            if next_token == "<e>":
                 break
         return ' '.join(tokens)
 
