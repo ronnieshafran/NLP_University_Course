@@ -240,14 +240,20 @@ class Corpus:
         begin = Token("Beginning", None, None, None, "<b>")
         end = Token("End", None, None, None, "<e>")
         for sentence in self.sentences:
+            if sentence is None:
+                continue
             sentence.insert_token(begin, 0)
             sentence.add_token(end)
             self.add_word_to_distinct_dict(begin.text)
             self.add_word_to_distinct_dict(end.text)
-            self.add_tokens_to_bigram([sentence.tokens[0], sentence.tokens[1]])
-            self.add_tokens_to_bigram([sentence.tokens[-2], sentence.tokens[-1]])
-            self.add_tokens_to_trigram([sentence.tokens[0], sentence.tokens[1], sentence.tokens[2]])
-            self.add_tokens_to_trigram([sentence.tokens[-3], sentence.tokens[-2], sentence.tokens[-1]])
+            if len(sentence.tokens) >= 2:
+                self.add_tokens_to_bigram([sentence.tokens[0], sentence.tokens[1]])
+                self.add_tokens_to_bigram([sentence.tokens[-2], sentence.tokens[-1]])
+            if len(sentence.tokens) == 3:
+                self.add_tokens_to_trigram([sentence.tokens[0], sentence.tokens[1], sentence.tokens[2]])
+            if len(sentence.tokens) > 3:
+                self.add_tokens_to_trigram([sentence.tokens[0], sentence.tokens[1], sentence.tokens[2]])
+                self.add_tokens_to_trigram([sentence.tokens[-3], sentence.tokens[-2], sentence.tokens[-1]])
         self.init_probability_dicts()
 
     def update_length_probabilities(self) -> None:
@@ -504,13 +510,11 @@ if __name__ == '__main__':
                  'Ogres are like onions.', 'You’re tearing me apart, Lisa!', 'I live my life one quarter at a time.']
 
     # second task - add the required tokens to the pre-existing corpus
-    try:
-        with open(output_file, encoding="utf8", mode="w") as file:
-            file.write(ngram.get_sentences_probability(sentences))
-            corpus.add_begin_and_end_tokens()
-            file.write(ngram.get_random_sentences())
-            print(f"Successfully written to file: {output_file}")
-    except:
-        print("Failed writing to file!")
+    with open(output_file, encoding="utf8", mode="w") as file:
+        file.write(ngram.get_sentences_probability(sentences))
+        corpus.add_begin_and_end_tokens()
+        file.write(ngram.get_random_sentences())
+        print(f"Successfully written to file: {output_file}")
+
 
     print(f"Elapsed Time: {process_time() - start_time}")
