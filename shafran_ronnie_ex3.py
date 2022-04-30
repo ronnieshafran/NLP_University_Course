@@ -217,6 +217,7 @@ class Corpus:
         return f"{name_without_ext} - Wiki page"
 
 
+# a chunk of sentences
 class Chunk:
     def __init__(self):
         self.sentences = []
@@ -234,9 +235,8 @@ class Chunk:
         return self.sentences[0].gender
 
 
-# Implement a "Classify" class, that will be built using a corpus of type "Corpus" (thus, you will need to
-# connect it in any way you want to the "Corpus" class). Make sure that the class contains the relevant fields for
-# classification, and the methods in order to complete the tasks:
+
+# This class represents a set of results for a certain vectorizer
 
 class ResultsContainer:
     def __init__(self, vectorizer_name=None):
@@ -356,9 +356,3 @@ if __name__ == '__main__':
     elapsed_time = process_time() - start_time
     print('================')
     print(f'Time Elapsed: {strftime("%H:%M:%S", gmtime(elapsed_time))}')
-
-    # Implement here your program:
-    # 1. Create a corpus from the file in the given directory (up to 1000 XML files from the BNC)
-    # 2. Create a classification object based on the class implemented above.
-    # 3. Classify the chunks of text from the corpus as described in the instructions.
-    # 4. Print onto the output file the results from the second task in the wanted format.
