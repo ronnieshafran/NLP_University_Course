@@ -59,7 +59,9 @@ class Corpus:
         self.distinct_words = dict()
         self.male_chunks = []
         self.female_chunks = []
-        self.function_words = set()
+        self.male_function_words = set()
+        self.female_function_words = set()
+        self.gender_detector = Detector()
 
     def __str__(self):
         result = ""
@@ -117,9 +119,11 @@ class Corpus:
             sentence.add_token(token)
             if token.text is not None:
                 sentence.length += len(token.text)
-                if token.tag == 'w':
-                    if token.pos == "ART" or token.pos == "PREP":
-                        self.function_words.add(token.text.lower())
+                if token.tag == 'w' and (token.pos == "ART" or token.pos == "PREP"):
+                    if gender == 'male':
+                        self.male_function_words.add(token.text)
+                    else:
+                        self.female_function_words.add(token.text)
 
         self.add_sentence(sentence)
         self.sentence_index += 1
@@ -167,27 +171,23 @@ class Corpus:
         title_tag = title_stmt_tag.find('title')
         return title_tag.text
 
-
     def get_author_gender(self, authors: list) -> str:
-        if authors is None:
-            return "Unknown"
-        detector = Detector()
-        genders = []
-        for author_name in authors:
+        detector = self.gender_detector
+        if authors is None or len(authors) == 0:
+            return 'Unknown'
+        first_gender = None
+        for i, author_name in enumerate(authors):
             parts = author_name.split(', ')
             if len(parts) <= 1:
-                continue
+                return 'Unknown'
             first_name = parts[1]
             gender = detector.get_gender(first_name)
             if gender != 'male' and gender != 'female':
-                return "Unknown"
-            genders.append(gender)
-        if len(genders) == 0:
-            return "Unknown"
-        first_gender = genders[0]
-        for gender in genders:
+                return 'Unknown'
+            if i == 0:
+                first_gender = gender
             if gender != first_gender:
-                return "Unknown"
+                return 'Unknown'
         return first_gender
 
     def add_text_file_to_corpus(self, file_name: str):
@@ -249,12 +249,14 @@ class ResultsContainer:
 
 
 class CustomFeatureVector:
-    def __init__(self, orig_vector, set):
+    def __init__(self, orig_vector, female_set, male_set):
         self.orig_vector = orig_vector
-        self.words_set = set
+        self.female_words_set = female_set
+        self.male_words_set = male_set
 
     def fit_transform(self, raw_documents):
-        feature_vector = [element for element in self.orig_vector if element.lower() in self.words_set]
+        feature_vector = [element for element in self.orig_vector if
+                          element in self.female_words_set or element in self.male_words_set]
         result_mat = np.zeros((len(raw_documents), len(feature_vector)), dtype=np.int64)
         index_dict = {element: index for index, element in enumerate(feature_vector)}
         for chunk_index, chunk in enumerate(raw_documents):
@@ -302,7 +304,7 @@ class Classify:
 
         # Classify using Custom Vector:
         bow_feature_vector = count_vectorizer.get_feature_names_out()
-        custom_vector = CustomFeatureVector(bow_feature_vector, corpus.function_words)
+        custom_vector = CustomFeatureVector(bow_feature_vector, corpus.female_function_words, corpus.male_function_words)
         x = custom_vector.fit_transform(chunks_as_text)
         cv_acc = self.ten_fold_cv(x, y, knn_classifier)
         train_test_report = self.train_test_split(x, y, knn_classifier)
@@ -316,18 +318,14 @@ class Classify:
 
     def ten_fold_cv(self, x, y, classifier) -> float:
         cv_score = cross_val_score(classifier, x, y, cv=10)
-        return round(cv_score.mean() * 100, 4)
+        return round(cv_score.mean() * 100, 3)
 
     def train_test_split(self, x, y, classifier):
-        x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3)
+        x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3, shuffle=True)
         classifier.fit(x_train, y_train)
         prediction = classifier.predict(x_test)
         labels = ['male', 'female']
         return classification_report(y_test, prediction, target_names=labels)
-
-    def write_results_to_file(self, cv_acc, train_test_report, vectorizer_name, file_path):
-        with open(file_path, encoding="utf8", mode="w") as file:
-            file.write(str(self))
 
 
 if __name__ == '__main__':
@@ -341,7 +339,8 @@ if __name__ == '__main__':
         xml_files_len = len([xml for xml in directory if xml.endswith(".xml")])
         if xml_file.endswith(".xml"):
             corpus.add_xml_file_to_corpus(os.path.join(xml_dir, xml_file))
-            print(f'reading XML files: {file_num} files read')
+            if file_num % 100 == 0:
+                print(f'reading XML files: {file_num} files read')
 
     print('XML file reading complete!')
     classifier = Classify(corpus)
