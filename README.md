@@ -15,4 +15,5 @@ Exercise 2:
   
   
 Exercise 3:
+
      The script divides given Corpus XMLs to chunk of 10 sentences, who are then used to train a KNN model to predict the gender of the author.
