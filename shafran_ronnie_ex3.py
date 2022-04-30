@@ -6,14 +6,13 @@ from sys import argv
 from string import punctuation
 from random import choice
 from time import process_time, strftime, gmtime
-
+from collections import Counter
 import numpy as np
 from gender_guesser.detector import Detector
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics import classification_report
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.neighbors import KNeighborsClassifier
-
 
 
 class Token:
@@ -60,6 +59,7 @@ class Corpus:
         self.distinct_words = dict()
         self.male_chunks = []
         self.female_chunks = []
+        self.function_words = set()
 
     def __str__(self):
         result = ""
@@ -82,11 +82,11 @@ class Corpus:
     def add_document(self, document: str):
         self.documents.append(document)
 
-    def add_word_to_distinct_dict(self, word):
-        if self.distinct_words.get(word) is None:
-            self.distinct_words[word] = 1
+    def add_to_word_dict(self, word, word_dict: dict):
+        if word_dict.get(word) is None:
+            word_dict[word] = 1
         else:
-            self.distinct_words[word] += 1
+            word_dict[word] += 1
 
     def tokenize_xml_element(self, element: ET.Element) -> Token:
         tag = element.tag
@@ -118,7 +118,9 @@ class Corpus:
             if token.text is not None:
                 sentence.length += len(token.text)
                 if token.tag == 'w':
-                    self.add_word_to_distinct_dict(token.text)
+                    if token.pos == "ART" or token.pos == "PREP":
+                        self.function_words.add(token.text.lower())
+
         self.add_sentence(sentence)
         self.sentence_index += 1
         return sentence
@@ -141,20 +143,21 @@ class Corpus:
     def add_xml_file_to_corpus(self, file_name: str):
         tree = ET.parse(file_name)
         root = tree.getroot()
-        authors = self.get_authors(tree)
+        authors = [author.text for author in root.iter('author')]
         gender = self.get_author_gender(authors)
-        fill_chunks = gender == 'male' or gender == 'female'
+        if gender != 'female' and gender != 'male':
+            return
+
         chunk = Chunk()
         for sentence_tag in root.iter('s'):
             sentence = self.add_sentence_from_xml_element(sentence_tag, authors, gender)
-            if fill_chunks:
-                if len(chunk) == 10:
-                    if gender == 'male':
-                        self.male_chunks.append(chunk)
-                    else:
-                        self.female_chunks.append(chunk)
-                    chunk = Chunk()
-                chunk.add(sentence)
+            if len(chunk) == 10:
+                if gender == 'male':
+                    self.male_chunks.append(chunk)
+                else:
+                    self.female_chunks.append(chunk)
+                chunk = Chunk()
+            chunk.add(sentence)
         self.add_document(self.get_xml_document_title(root))
 
     def get_xml_document_title(self, root) -> str:
@@ -164,16 +167,6 @@ class Corpus:
         title_tag = title_stmt_tag.find('title')
         return title_tag.text
 
-    def get_authors(self, root: ET.ElementTree) -> list:
-        header_tag = root.find('teiHeader')
-        description_tag = header_tag.find('fileDesc')
-        source_tag = description_tag.find('sourceDesc')
-        bibl_tag = source_tag.find('bibl')
-        authors = []
-        author_tags = bibl_tag.iter('author')
-        for author_tag in author_tags:
-            authors.append(author_tag.text)
-        return authors if len(authors) > 0 else None
 
     def get_author_gender(self, authors: list) -> str:
         if authors is None:
@@ -209,7 +202,7 @@ class Corpus:
                     tokenized = self.tokenize_from_text(token)
                     sentence_to_add.add_token(tokenized)
                     if tokenized.text is not None and tokenized.tag == 'w':
-                        self.add_word_to_distinct_dict(tokenized.text)
+                        self.add_to_word_dict(tokenized.text)
                 self.add_sentence(sentence_to_add)
                 self.sentence_index += 1
 
@@ -246,14 +239,31 @@ class Chunk:
 # classification, and the methods in order to complete the tasks:
 
 class ResultsContainer:
-    def __init__(self, vectorizer_name = None):
+    def __init__(self, vectorizer_name=None):
         self.report = None
         self.cv_acc = None
         self.vectorizer = vectorizer_name
 
     def __str__(self):
-        return f'=={self.vectorizer} Classification==\n\nCross Validation Accuracy: {self.cv_acc}%\n\n{self.report}'
+        return f'=={self.vectorizer} Classification==\n\nCross Validation Accuracy: {self.cv_acc}%\n\n{self.report}\n\n'
 
+
+class CustomFeatureVector:
+    def __init__(self, orig_vector, set):
+        self.orig_vector = orig_vector
+        self.words_set = set
+
+    def fit_transform(self, raw_documents):
+        feature_vector = [element for element in self.orig_vector if element.lower() in self.words_set]
+        result_mat = np.zeros((len(raw_documents), len(feature_vector)), dtype=np.int64)
+        index_dict = {element: index for index, element in enumerate(feature_vector)}
+        for chunk_index, chunk in enumerate(raw_documents):
+            row = result_mat[chunk_index]
+            for word in chunk.split():
+                index = index_dict.get(word)
+                if index is not None:
+                    row[index] += 1
+        return result_mat
 
 
 class Classify:
@@ -282,15 +292,22 @@ class Classify:
         y = np.array([1] * len(self.male_chunks) + [0] * len(self.female_chunks))
 
         # Classify using Bag Of Words:
-        x = CountVectorizer().fit_transform(chunks_as_text)
-        cv_acc = self.ten_fold_cv(x,y,knn_classifier)
-        train_test_report = self.train_test_split(x,y,knn_classifier)
+        count_vectorizer = CountVectorizer()
+        bow = count_vectorizer.fit_transform(chunks_as_text)
+        x = bow
+        cv_acc = self.ten_fold_cv(x, y, knn_classifier)
+        train_test_report = self.train_test_split(x, y, knn_classifier)
         self.bow_results.cv_acc = cv_acc
         self.bow_results.report = train_test_report
 
         # Classify using Custom Vector:
-
-
+        bow_feature_vector = count_vectorizer.get_feature_names_out()
+        custom_vector = CustomFeatureVector(bow_feature_vector, corpus.function_words)
+        x = custom_vector.fit_transform(chunks_as_text)
+        cv_acc = self.ten_fold_cv(x, y, knn_classifier)
+        train_test_report = self.train_test_split(x, y, knn_classifier)
+        self.custom_results.cv_acc = cv_acc
+        self.custom_results.report = train_test_report
 
     def chunks_to_text(self):
         male_text = [str(chunk) for chunk in self.male_chunks]
@@ -324,20 +341,22 @@ if __name__ == '__main__':
         xml_files_len = len([xml for xml in directory if xml.endswith(".xml")])
         if xml_file.endswith(".xml"):
             corpus.add_xml_file_to_corpus(os.path.join(xml_dir, xml_file))
-            if file_num % 100 == 0 :
-                print(f'reading XML files: {file_num} files read')
+            print(f'reading XML files: {file_num} files read')
+
     print('XML file reading complete!')
     classifier = Classify(corpus)
     print('Performing Classification...')
     classifier.perform_classification()
     with open(output_file, encoding="utf8", mode="w") as file:
+        file.write(f'Before Down-sampling:\n\nFemale:{classifier.orig_female_chunks} Male:{classifier.orig_male_chunks}\n\n')
+        file.write(f'After Down-sampling:\n\nFemale:{len(classifier.female_chunks)} Male:{len(classifier.male_chunks)}\n\n')
         file.write(str(classifier.bow_results))
+        file.write(str(classifier.custom_results))
     print(f'Results file created: {output_file}')
 
     elapsed_time = process_time() - start_time
     print('================')
     print(f'Time Elapsed: {strftime("%H:%M:%S", gmtime(elapsed_time))}')
-
 
     # Implement here your program:
     # 1. Create a corpus from the file in the given directory (up to 1000 XML files from the BNC)
