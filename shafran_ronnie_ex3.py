@@ -6,7 +6,6 @@ from sys import argv
 from string import punctuation
 from random import choice
 from time import process_time, strftime, gmtime
-from collections import Counter
 import numpy as np
 from gender_guesser.detector import Detector
 from sklearn.feature_extraction.text import CountVectorizer
