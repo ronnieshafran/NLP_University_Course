@@ -3,13 +3,14 @@ from gensim.models import KeyedVectors
 from sys import argv
 import os
 import re
+import numpy as np
 import xml.etree.ElementTree as ET
 from string import punctuation
-from abc import ABC, abstractmethod
-from math import log
+from random import randrange
 from more_itertools import pairwise, triplewise
-from random import choices
-from time import process_time
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+from time import process_time, strftime, gmtime
 
 
 class Token:
@@ -220,6 +221,18 @@ class Corpus:
             self.trigram_dict[key] += 1
 
 
+class Tweet:
+    def __init__(self, text, category):
+        self.text = text
+        self.category = category
+
+
+def split_sentence_to_tokens(sentence: str) -> []:
+    initial_split = re.split('(\W)', sentence)
+    return [token for token in initial_split if token.strip()]
+
+
+# Ex 1 a
 def similarity_between_pairs(model) -> str:
     pairs = [('good', 'bad'), ('short', 'tall'), ('friend', 'mate'), ('father', 'dad'), ('fight', 'battle'), ('start', 'end'),
              ('hawk', 'eagle'), ('house', 'home'), ('hot', 'cold'), ('software', 'program')]
@@ -229,8 +242,9 @@ def similarity_between_pairs(model) -> str:
     return '\n'.join(results_list)
 
 
+# Ex 1 b
 def similarity_between_analogies(model) -> str:
-    analogies_list = ['Analogies:']
+    analogies_list = ['\n\nAnalogies:']
     most_similar_list = ['Most Similar:']
     distances_list = ['Distances:']
     analogies = [(('red', 'color'), ('circle', 'shape')),
@@ -249,6 +263,7 @@ def similarity_between_analogies(model) -> str:
     return '\n\n'.join(results)
 
 
+# Generate an alternate version of the lyrics by replacing one word per line
 def get_altered_song(model: KeyedVectors, song_file: str, corpus: Corpus):
     words_to_change = [
         'baby',
@@ -317,7 +332,7 @@ def get_altered_song(model: KeyedVectors, song_file: str, corpus: Corpus):
         'la'
     ]
     with open(song_file) as lyrics:
-        final_text = []
+        final_text = ["\n\n=== New Hit ===\n"]
         for line, word in zip(lyrics, words_to_change):
             line = line.strip('\n')
             tokens = corpus.split_sentence_to_tokens(line)
@@ -401,16 +416,112 @@ def prepare_kv_file():
     pre_trained_model.save('word2vec_vectors.kv')
 
 
+# Calculate sum of WiVi
+def get_weight_vector(tweet, model, weight_func):
+    tweet_tokens = split_sentence_to_tokens(tweet)
+    model_length = model.vector_size
+    w = [np.full(model_length, weight_func(token)) for token in tweet_tokens]
+    v = [np.full(model_length, 1) if token.lower() not in model else model[token.lower()] for token in tweet_tokens]
+    result = np.zeros(model_length)
+    for weight, vector in zip(w, v):
+        result += np.multiply(weight, vector)
+    return result / len(tweet_tokens)
+
+
+def get_tokens_from_category(category: str, tweets: []) -> []:
+    tokens = [split_sentence_to_tokens(tweet.text) for tweet in tweets if tweet.category == category]
+    return [item for sublist in tokens for item in sublist]
+
+
+# My custom function, logic explained in the report
+def per_category_scores(tweets):
+    words_dict = {}
+    covid_tokens = get_tokens_from_category('Covid', tweets)
+    olympics_tokens = get_tokens_from_category('Olympics', tweets)
+    pets_tokens = get_tokens_from_category('Pets', tweets)
+    from collections import Counter
+
+    covid_counter = Counter(covid_tokens)
+    olympics_counter = Counter(olympics_tokens)
+    pets_counter = Counter(pets_tokens)
+
+    covid_unique_keys = [key for key in covid_counter.keys() if key not in olympics_counter.keys() and key not in pets_counter.keys()]
+    olympics_unique_keys = [key for key in olympics_counter.keys() if
+                            key not in covid_counter.keys() and key not in pets_counter.keys()]
+    pets_unique_keys = [key for key in pets_counter.keys() if key not in covid_counter.keys() and key not in olympics_counter.keys()]
+
+    scores_multiplier = {'Covid': 1, 'Olympics': 500, 'Pets': 1000}
+    categories = {'Covid': (covid_unique_keys, covid_counter),
+                  'Olympics': (olympics_unique_keys, olympics_counter),
+                  'Pets': (pets_unique_keys, pets_counter)}
+
+    for category, uniques in categories.items():
+        unique_keys = uniques[0]
+        unique_counter = uniques[1]
+        for unique_key in unique_keys:
+            words_dict[unique_key] = unique_counter[unique_key] * scores_multiplier[category]
+
+    return words_dict
+
+
+def analyze_tweets(model, tweets_file):
+    tweets = []
+    category = None
+
+    with open(tweets_file, encoding="utf8") as file:
+        for line in file:
+            if line in ['\n', '\r\n']:
+                continue
+            if line.startswith('=='):
+                category = line.strip().strip('==').strip()
+            else:
+                tweets.append(Tweet(line.strip(), category))
+
+    custom_words_dict = per_category_scores(tweets)
+    weight_functions_dict = {
+        'Arithmetic Average': lambda _: 1,
+        'Random Score': lambda _: randrange(10),
+        'Custom Function': lambda token: custom_words_dict.get(token.lower(), 0)
+    }
+    pca = PCA(n_components=2)
+
+    for function_name, function in weight_functions_dict.items():
+        tweet_weight_vectors = [get_weight_vector(tweet.text, model, function) for tweet in tweets]
+        pca.fit(tweet_weight_vectors)
+        transform = pca.transform(tweet_weight_vectors)
+        plot_pca_results(function_name, transform, tweets)
+
+
+def plot_pca_results(function_name, transform, tweets):
+    plt.title(f'{function_name}: Ronnie Shafran')
+    for i, (tweet, (x, y)) in enumerate(zip(tweets, transform)):
+        plt.scatter(x, y, s=8, color=get_tweet_color(tweet))
+        plt.text(x + .1, y + .1, f'{i} : {tweet.category}', fontsize=8)
+    plt.show()
+
+
+def get_tweet_color(tweet):
+    if tweet.category == 'Covid':
+        color = 'red'
+    elif tweet.category == 'Olympics':
+        color = 'pink'
+    else:
+        color = 'black'
+    return color
+
+
 if __name__ == "__main__":
     kv_file = argv[1]
     xml_dir = argv[2]  # directory containing xml files from the BNC corpus (not a zip file)
     lyrics_file = argv[3]
     tweets_file = argv[4]
     output_file = argv[5]
+    start_time = process_time()
+    print('Loading KV File..')
     model = KeyedVectors.load(kv_file, mmap='r')
-
-    # pairs_sim_string = similarity_between_pairs(model)
-    # analogies_sim_string = similarity_between_analogies(model)
+    print('Building analogies...')
+    pairs_sim_string = similarity_between_pairs(model)
+    analogies_sim_string = similarity_between_analogies(model)
 
     corpus = Corpus()
     print('Building corpus...')
@@ -420,7 +531,17 @@ if __name__ == "__main__":
         if xml_file.endswith(".xml"):
             corpus.add_xml_file_to_corpus(os.path.join(xml_dir, xml_file))
     print('XML file reading complete!')
+    print('Generating new hit...')
     song = get_altered_song(model, lyrics_file, corpus)
+    print('Hit generated!')
+    print('Analyzing tweets...')
+    analyze_tweets(model, tweets_file)
+    print('Tweets completed!')
     with open(output_file, encoding="utf8", mode="w") as file:
+        file.write(pairs_sim_string)
+        file.write(analogies_sim_string)
         file.write(song)
     print(f'Results file created: {output_file}')
+    elapsed_time = process_time() - start_time
+    print('================')
+    print(f'Time Elapsed: {strftime("%H:%M:%S", gmtime(elapsed_time))}')
