@@ -10,7 +10,7 @@ from random import randrange
 from more_itertools import pairwise, triplewise
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
-from time import process_time, strftime, gmtime
+from time import time, strftime, gmtime
 
 
 class Token:
@@ -496,7 +496,7 @@ def plot_pca_results(function_name, transform, tweets):
     plt.title(f'{function_name}: Ronnie Shafran')
     for i, (tweet, (x, y)) in enumerate(zip(tweets, transform)):
         plt.scatter(x, y, s=8, color=get_tweet_color(tweet))
-        plt.text(x + .1, y + .1, f'{i} : {tweet.category}', fontsize=8)
+        plt.text(x + .01, y + .01, f'{i} : {tweet.category}', fontsize=8)
     plt.show()
 
 
@@ -516,7 +516,7 @@ if __name__ == "__main__":
     lyrics_file = argv[3]
     tweets_file = argv[4]
     output_file = argv[5]
-    start_time = process_time()
+    start_time = time()
     print('Loading KV File..')
     model = KeyedVectors.load(kv_file, mmap='r')
     print('Building analogies...')
@@ -542,6 +542,6 @@ if __name__ == "__main__":
         file.write(analogies_sim_string)
         file.write(song)
     print(f'Results file created: {output_file}')
-    elapsed_time = process_time() - start_time
+    elapsed_time = time() - start_time
     print('================')
     print(f'Time Elapsed: {strftime("%H:%M:%S", gmtime(elapsed_time))}')

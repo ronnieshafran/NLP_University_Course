@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 from sys import argv
 from string import punctuation
 from random import choice
-from time import process_time, strftime, gmtime
+from time import process_time, strftime, gmtime, time
 import numpy as np
 from gender_guesser.detector import Detector
 from sklearn.feature_extraction.text import CountVectorizer
@@ -330,7 +330,7 @@ class Classify:
 if __name__ == '__main__':
     xml_dir = argv[1]  # directory containing xml files from the BNC corpus, full path
     output_file = argv[2]  # output file name, full path
-    start_time = process_time()
+    start_time = time()
     corpus = Corpus()
 
     directory = os.listdir(xml_dir)
@@ -352,6 +352,6 @@ if __name__ == '__main__':
         file.write(str(classifier.custom_results))
     print(f'Results file created: {output_file}')
 
-    elapsed_time = process_time() - start_time
+    elapsed_time = time() - start_time
     print('================')
     print(f'Time Elapsed: {strftime("%H:%M:%S", gmtime(elapsed_time))}')
